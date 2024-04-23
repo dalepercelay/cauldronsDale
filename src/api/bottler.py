@@ -44,9 +44,6 @@ def get_bottle_plan():
     Go from barrel to bottle.
     """
 
-    # Each bottle has a quantity of what proportion of red, blue, and
-    # green potion to add.
-    # Expressed in integers from 1 to 100 that must sum up to 100.
 
     with db.engine.begin() as connection:
         inventory = connection.execute(
@@ -86,13 +83,13 @@ def get_bottle_plan():
             order.append(
                 {
                     "potion_type": [0, 50, 50, 0],
-                    "quantity": blue    _ml // 50,
+                    "quantity": blue_ml // 50,
                 }
             )
 
         return order
     
     
-
+    
 if __name__ == "__main__":
     print(get_bottle_plan())

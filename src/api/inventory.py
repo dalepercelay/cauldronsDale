@@ -36,7 +36,7 @@ def get_inventory():
         "gold": gold,
     }
 
-# Gets called once a day
+
 @router.post("/plan")
 def get_capacity_plan():
     """ 
@@ -53,7 +53,7 @@ class CapacityPurchase(BaseModel):
     potion_capacity: int
     ml_capacity: int
 
-# Gets called once a day
+
 @router.post("/deliver/{order_id}")
 def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     """ 
