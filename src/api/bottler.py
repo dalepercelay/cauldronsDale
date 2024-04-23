@@ -22,59 +22,42 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
     with db.engine.begin() as connection:
         for potion in potions_delivered:
-            if potion.potion_type == [0, 100, 0, 0]:
-                connection.execute(
-                    sqlalchemy.text(
-                        "UPDATE global_inventory SET num_green_potions = num_green_potions + :potion_quantity, num_green_ml = num_green_ml - :ml_quantity;"
-                    ),
-                    {
-                        "potion_quantity": potion.quantity,
-                        "ml_quantity": potion.quantity * 100,
-                    },
-                )
-            elif potion.potion_type == [0, 0, 100, 0]:
-                connection.execute(
-                    sqlalchemy.text(
-                        "UPDATE global_inventory SET num_blue_potions = num_blue_potions + :potion_quantity, num_blue_ml = num_blue_ml - :ml_quantity;"
-                    ),
-                    {
-                        "potion_quantity": potion.quantity,
-                        "ml_quantity": potion.quantity * 100,
-                    },
-                )
-            elif potion.potion_type == [100, 0, 0, 0]:
-                connection.execute(
-                    sqlalchemy.text(
-                        "UPDATE global_inventory SET num_red_potions = num_red_potions + :potion_quantity, num_red_ml = num_red_ml - :ml_quantity;"
-                    ),
-                    {
-                        "potion_quantity": potion.quantity,
-                        "ml_quantity": potion.quantity * 100,
-                    },
-                )
-            else:
-                continue
+            connection.execute(
+                sqlalchemy.text(
+                    f"""
+                    UPDATE global_inventory SET
+                    num_red_ml = num_red_ml - {potion.potion_type[0] * potion.quantity},
+                    num_green_ml = num_green_ml - {potion.potion_type[1] * potion.quantity},
+                    num_blue_ml = num_blue_ml - {potion.potion_type[2] * potion.quantity};
+                    UPDATE potions SET quantity = quantity + {potion.quantity}
+                    WHERE potion_type = ARRAY{potion.potion_type}::int[];
+                    """
+                ),
+            )
 
     return "OK"
+
 
 @router.post("/plan")
 def get_bottle_plan():
     """
     Go from barrel to bottle.
     """
-    
+
+    # Each bottle has a quantity of what proportion of red, blue, and
+    # green potion to add.
+    # Expressed in integers from 1 to 100 that must sum up to 100.
 
     with db.engine.begin() as connection:
-        result = connection.execute(
+        inventory = connection.execute(
             sqlalchemy.text(
                 "SELECT num_green_ml, num_blue_ml, num_red_ml FROM global_inventory LIMIT 1;"
             )
-        )
+        ).fetchone()
 
-        row = result.fetchone()
-        green_ml = row[0]
-        blue_ml = row[1]
-        red_ml = row[2]
+        green_ml = inventory[0]
+        blue_ml = inventory[1]
+        red_ml = inventory[2]
 
         order = []
 
@@ -97,6 +80,13 @@ def get_bottle_plan():
                 {
                     "potion_type": [100, 0, 0, 0],
                     "quantity": red_ml // 100,
+                }
+            )
+        if blue_ml >= 50 and green_ml >= 50:
+            order.append(
+                {
+                    "potion_type": [0, 50, 50, 0],
+                    "quantity": blue    _ml // 50,
                 }
             )
 

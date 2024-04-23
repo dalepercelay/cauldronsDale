@@ -23,31 +23,74 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-    print(f"Delivered: {barrels_delivered} order_id: {order_id}")
+    print(f"barrels delievered: {barrels_delivered} order_id: {order_id}")
 
     with db.engine.begin() as connection:
         for barrel in barrels_delivered:
-            connection.execute(sqlalchemy.text("UPDATE global_inventory SET num_green_ml = num_green_ml + :quantity, gold = gold - :price;"), {"quantity": barrel.quantity * barrel.ml_per_barrel, "price": barrel.price})
+            connection.execute(
+                sqlalchemy.text("""
+                    UPDATE global_inventory SET
+                    num_red_ml = num_red_ml + :red_ml_increase,
+                    num_green_ml = num_green_ml + :green_ml_increase,
+                    num_blue_ml = num_blue_ml + :blue_ml_increase,
+                    gold = gold - :price_decrease;
+                """),
+                {
+                    "red_ml_increase": barrel.potion_type[0] * barrel.quantity * barrel.ml_per_barrel,
+                    "green_ml_increase": barrel.potion_type[1] * barrel.quantity * barrel.ml_per_barrel,
+                    "blue_ml_increase": barrel.potion_type[2] * barrel.quantity * barrel.ml_per_barrel,
+                    "price_decrease": barrel.price
+                }
+            )
 
     return "OK"
 
-
+@router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     print(wholesale_catalog)
 
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory ORDER BY created_at DESC LIMIT 1;"))
+        inventory = connection.execute(
+            sqlalchemy.text(
+                "SELECT num_red_ml, num_green_ml, num_blue_ml, gold FROM global_inventory LIMIT 1;"
+            )
+        ).fetchone()
 
-        inventory = result.fetchone()
-        for barrel in wholesale_catalog:  
-            if barrel.sku == "SMALL_GREEN_BARREL":
-                if inventory[2] < 10 and inventory[4] >= barrel.price:
-                    return [
-                        {
-                            "sku": barrel.sku,
-                            "quantity": 1,
-                        }
-                    ]
+        red_ml = inventory[0]
+        green_ml = inventory[1]
+        blue_ml = inventory[2]
+        gold = inventory[3]
+
+        if green_ml <= blue_ml and green_ml <= red_ml:
+            for barrel in wholesale_catalog:
+                if barrel.potion_type == [0, 1, 0, 0]:
+                    if gold >= barrel.price:
+                        return [
+                            {
+                                "sku": barrel.sku,
+                                "quantity": 1,
+                            }
+                        ]
+        if blue_ml <= green_ml and blue_ml <= red_ml:
+            for barrel in wholesale_catalog:
+                if barrel.potion_type == [0, 0, 1, 0]:
+                    if gold >= barrel.price:
+                        return [
+                            {
+                                "sku": barrel.sku,
+                                "quantity": 1,
+                            }
+                        ]
+        if red_ml <= green_ml and red_ml <= blue_ml:
+            for barrel in wholesale_catalog:
+                if barrel.potion_type == [1, 0, 0, 0]:
+                    if gold >= barrel.price:
+                        return [
+                            {
+                                "sku": barrel.sku,
+                                "quantity": 1,
+                            }
+                        ]
 
     return []
