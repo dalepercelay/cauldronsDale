@@ -21,16 +21,28 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     print(f"potions delievered: {potions_delivered} order_id: {order_id}")
 
     with db.engine.begin() as connection:
+        transaction = connection.execute(
+            sqlalchemy.text(
+                f"""
+                INSERT INTO POTION_TRANSACTIONS (description) VALUES ('Bottler order {order_id}')
+                RETURNING id;
+                """
+            )
+        ).fetchone()[0]
         for potion in potions_delivered:
             connection.execute(
                 sqlalchemy.text(
                     f"""
-                    UPDATE global_inventory SET
-                    num_red_ml = num_red_ml - {potion.potion_type[0] * potion.quantity},
-                    num_green_ml = num_green_ml - {potion.potion_type[1] * potion.quantity},
-                    num_blue_ml = num_blue_ml - {potion.potion_type[2] * potion.quantity};
-                    UPDATE potions SET quantity = quantity + {potion.quantity}
-                    WHERE potion_type = ARRAY{potion.potion_type}::int[];
+                    INSERT INTO global_inventory (num_red_ml, num_green_ml, num_blue_ml, gold, description) VALUES (
+                    {-potion.potion_type[0] * potion.quantity},
+                    {-potion.potion_type[1] * potion.quantity},
+                    {-potion.potion_type[2] * potion.quantity},
+                    0,
+                    'Bottler order {order_id}: {potion.quantity} {potion.potion_type} potion(s)');
+                    INSERT INTO ledger_entries (sku, quantity, transaction) VALUES (
+                    (SELECT sku FROM potions WHERE potion_type = ARRAY{potion.potion_type}),
+                    {potion.quantity},
+                    {transaction});
                     """
                 ),
             )
@@ -44,50 +56,53 @@ def get_bottle_plan():
     Go from barrel to bottle.
     """
 
-
     with db.engine.begin() as connection:
+        potion_types = connection.execute(
+            sqlalchemy.text(
+                """
+                SELECT potion_type from potions;
+                """
+            )
+        ).fetchall()
+
         inventory = connection.execute(
             sqlalchemy.text(
-                "SELECT num_green_ml, num_blue_ml, num_red_ml FROM global_inventory LIMIT 1;"
+                "SELECT SUM(num_red_ml), SUM(num_green_ml), SUM(num_blue_ml) FROM global_inventory;"
             )
         ).fetchone()
 
-        green_ml = inventory[0]
-        blue_ml = inventory[1]
-        red_ml = inventory[2]
+        red_ml = inventory[0]
+        green_ml = inventory[1]
+        blue_ml = inventory[2]
 
         order = []
 
-        if green_ml >= 100:
-            order.append(
-                {
-                    "potion_type": [0, 100, 0, 0],
-                    "quantity": green_ml // 100,
-                }
-            )
-        if blue_ml >= 100:
-            order.append(
-                {
-                    "potion_type": [0, 0, 100, 0],
-                    "quantity": blue_ml // 100,
-                }
-            )
-        if red_ml >= 100:
-            order.append(
-                {
-                    "potion_type": [100, 0, 0, 0],
-                    "quantity": red_ml // 100,
-                }
-            )
-        if blue_ml >= 50 and green_ml >= 50:
-            order.append(
-                {
-                    "potion_type": [0, 50, 50, 0],
-                    "quantity": blue_ml // 50,
-                }
-            )
+        for potion in potion_types:
+            potion_type = potion[0]
+
+            red_required = potion_type[0]
+            green_required = potion_type[1]
+            blue_required = potion_type[2]
+
+            if (
+                red_ml >= red_required
+                and green_ml >= green_required
+                and blue_ml >= blue_required
+            ):
+                order.append(
+                    {
+                        "potion_type": potion_type,
+                        "quantity": 1,
+                    }
+                )
+
+                red_ml -= red_required
+                green_ml -= green_required
+                blue_ml -= blue_required
 
         return order
+
+
     
     
     

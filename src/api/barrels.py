@@ -28,22 +28,20 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     with db.engine.begin() as connection:
         for barrel in barrels_delivered:
             connection.execute(
-                sqlalchemy.text("""
-                    UPDATE global_inventory SET
-                    num_red_ml = num_red_ml + :red_ml_increase,
-                    num_green_ml = num_green_ml + :green_ml_increase,
-                    num_blue_ml = num_blue_ml + :blue_ml_increase,
-                    gold = gold - :price_decrease;
-                """),
-                {
-                    "red_ml_increase": barrel.potion_type[0] * barrel.quantity * barrel.ml_per_barrel,
-                    "green_ml_increase": barrel.potion_type[1] * barrel.quantity * barrel.ml_per_barrel,
-                    "blue_ml_increase": barrel.potion_type[2] * barrel.quantity * barrel.ml_per_barrel,
-                    "price_decrease": barrel.price
-                }
+                sqlalchemy.text(
+                    f"""
+                    INSERT INTO global_inventory (num_red_ml, num_green_ml, num_blue_ml, gold, description) VALUES (
+                    {barrel.potion_type[0] * barrel.quantity * barrel.ml_per_barrel},
+                    {barrel.potion_type[1] * barrel.quantity * barrel.ml_per_barrel},
+                    {barrel.potion_type[2] * barrel.quantity * barrel.ml_per_barrel},
+                    {-barrel.price},
+                    'Barrel order {order_id}: {barrel.sku} delivered');
+                    """
+                ),
             )
 
     return "OK"
+
 
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
@@ -53,16 +51,16 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     with db.engine.begin() as connection:
         inventory = connection.execute(
             sqlalchemy.text(
-                "SELECT num_red_ml, num_green_ml, num_blue_ml, gold FROM global_inventory LIMIT 1;"
+                "SELECT SUM(num_red_ml), SUM(num_green_ml), SUM(num_blue_ml), SUM(gold) FROM global_inventory;"
             )
         ).fetchone()
 
-        red_ml = inventory[0]
-        green_ml = inventory[1]
-        blue_ml = inventory[2]
+        num_red_ml = inventory[0]
+        num_green_ml = inventory[1]
+        num_blue_ml = inventory[2]
         gold = inventory[3]
 
-        if green_ml <= blue_ml and green_ml <= red_ml:
+        if num_green_ml <= num_blue_ml and num_green_ml <= num_red_ml:
             for barrel in wholesale_catalog:
                 if barrel.potion_type == [0, 1, 0, 0]:
                     if gold >= barrel.price:
@@ -72,7 +70,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                                 "quantity": 1,
                             }
                         ]
-        if blue_ml <= green_ml and blue_ml <= red_ml:
+        if num_blue_ml <= num_green_ml and num_blue_ml <= num_red_ml:
             for barrel in wholesale_catalog:
                 if barrel.potion_type == [0, 0, 1, 0]:
                     if gold >= barrel.price:
@@ -82,7 +80,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                                 "quantity": 1,
                             }
                         ]
-        if red_ml <= green_ml and red_ml <= blue_ml:
+        if num_red_ml <= num_green_ml and num_red_ml <= num_blue_ml:
             for barrel in wholesale_catalog:
                 if barrel.potion_type == [1, 0, 0, 0]:
                     if gold >= barrel.price:

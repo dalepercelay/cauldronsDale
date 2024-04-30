@@ -19,14 +19,13 @@ def reset():
         connection.execute(
             sqlalchemy.text(
                 """
-                UPDATE global_inventory SET
-                num_red_ml = 0,
-                num_green_ml = 0,
-                num_blue_ml = 0,
-                gold = 100;
-                UPDATE potions SET
-                quantity = 0;
+                DELETE FROM global_inventory;
+                DELETE FROM ledger_entries;
+                DELETE FROM potion_transactions;
                 DELETE FROM carts;
+                DELETE FROM cart_items;
+                INSERT INTO global_inventory (num_red_ml, num_green_ml, num_blue_ml, gold, description)
+                VALUES (0, 0, 0, 100, 'Game reset');
                 """
             )
         )

@@ -17,7 +17,7 @@ def get_inventory():
     with db.engine.begin() as connection:
         inventory = connection.execute(
             sqlalchemy.text(
-                "SELECT num_red_ml, num_green_ml, num_blue_ml, gold FROM global_inventory LIMIT 1;"
+                "SELECT SUM(num_red_ml), SUM(num_green_ml), SUM(num_blue_ml), SUM(gold) FROM global_inventory;"
             )
         ).fetchone()
 
@@ -27,7 +27,7 @@ def get_inventory():
         gold = inventory[3]
 
         num_potions = connection.execute(
-            sqlalchemy.text("SELECT SUM(quantity) FROM potions;")
+            sqlalchemy.text("SELECT SUM(quantity) FROM ledger_entries;")
         ).fetchone()[0]
 
     return {
@@ -39,15 +39,12 @@ def get_inventory():
 
 @router.post("/plan")
 def get_capacity_plan():
-    """ 
-    Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
+    """
+    Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional
     capacity unit costs 1000 gold.
     """
 
-    return {
-        "potion_capacity": 0,
-        "ml_capacity": 0
-        }
+    return {"potion_capacity": 0, "ml_capacity": 0}
 
 class CapacityPurchase(BaseModel):
     potion_capacity: int
@@ -55,9 +52,9 @@ class CapacityPurchase(BaseModel):
 
 
 @router.post("/deliver/{order_id}")
-def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
-    """ 
-    Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
+def deliver_capacity_plan(capacity_purchase: CapacityPurchase, order_id: int):
+    """
+    Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional
     capacity unit costs 1000 gold.
     """
 
