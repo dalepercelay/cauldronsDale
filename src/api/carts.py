@@ -55,20 +55,49 @@ def search_orders(
     time is 5 total line items.
     """
 
-    return {
-        "previous": "",
-        "next": "",
-        "results": [
-            {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
-            }
-        ],
+    sort_col_mapping = {
+        search_sort_options.customer_name: "customer_name",
+        search_sort_options.item_sku: "sku",
+        search_sort_options.line_item_total: "total",
+        search_sort_options.timestamp: "created_at",
     }
 
+    sort_col = sort_col_mapping.get(sort_col)
+
+    offset = int(search_page) if search_page else 0
+    limit = 5
+
+    with db.engine.begin() as connection:
+        results = connection.execute(
+            sqlalchemy.text(
+                f"""
+                SELECT cart_items.id, cart_items.sku, carts.customer_name, (potions.price * cart_items.quantity) as total, cart_items.created_at
+                FROM cart_items
+                JOIN carts ON cart_items.cart_id = carts.id
+                JOIN potions ON cart_items.sku = potions.sku
+                WHERE carts.customer_name ILIKE '%{customer_name}%'
+                AND cart_items.sku ILIKE '%{potion_sku}%'
+                ORDER BY {sort_col} {sort_order.value}
+                LIMIT {limit} OFFSET {offset};
+                """
+            ),
+        ).fetchall()
+
+    previous = "" if offset == 0 else str(offset - limit)
+    next = "" if len(results) < limit else str(offset + limit)
+    results = [{
+                "line_item_id": row[0],
+                "item_sku": row[1],
+                "customer_name": row[2],
+                "line_item_total": row[3],
+                "timestamp": row[4].isoformat(),
+                } for row in results]
+
+    return {
+        "previous": previous,
+        "next": next,
+        "results": results,
+    }
 
 
 class Customer(BaseModel):
