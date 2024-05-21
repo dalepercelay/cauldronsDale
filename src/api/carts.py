@@ -212,13 +212,6 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             ),
         )
 
-        connection.execute(
-            sqlalchemy.text(
-                f"""
-                DELETE FROM carts WHERE id = {cart_id};
-                """
-            ),
-        )
 
         return {
             "total_potions_bought": total_potions,
