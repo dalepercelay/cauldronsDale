@@ -14,6 +14,7 @@ router = APIRouter(
 class PotionInventory(BaseModel):
     potion_type: list[int]
     quantity: int
+    \
 
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):

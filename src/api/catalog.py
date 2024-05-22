@@ -33,5 +33,6 @@ def get_catalog():
             }
             for row in potions
         ]
+    print(catalog)
 
     return catalog
